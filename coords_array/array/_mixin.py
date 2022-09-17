@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ..coords import Coordinates, CoordinateError, as_coordinates
-from ..typing import CoordinateLike
+from ..coords._coordinates import CoordinateLike
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -21,17 +21,20 @@ class CoordinatesMixin:
     @coords.setter
     def coords(self, value: CoordinateLike | None):
         if value is None:
-            self._coords = Coordinates.undef(self.ndim)
+            self._coords = Coordinates.undef(self._get_shape())
         else:
-            self._coords = as_coordinates(value, self.shape)
+            self._coords = as_coordinates(value, self._get_shape())
 
     @property
     def shape(self) -> tuple[int, ...]:
         raise NotImplementedError()
 
+    def _get_shape(self) -> tuple[int, ...]:
+        raise NotImplementedError()
+
     @property
     def ndim(self) -> int:
-        return len(self.shape)
+        return len(self._get_shape())
 
     @property
     def value(self) -> Any:

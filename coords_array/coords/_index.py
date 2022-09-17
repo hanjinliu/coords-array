@@ -9,12 +9,12 @@ from typing import (
     Union,
     Iterable,
     TYPE_CHECKING,
+    TypedDict,
 )
 import numpy as np
 
 if TYPE_CHECKING:
     from typing_extensions import Self
-    from ..typing import IndexLike
 
 _T = TypeVar("_T", bound=Hashable)
 _Slicable = Union[SupportsIndex, slice, list[int], np.ndarray]
@@ -278,11 +278,27 @@ class CategoricalIndex(Index[_T]):
         )
 
 
+class IndexOptions(TypedDict):
+    scale: float
+    unit: str
+    labels: Iterable[Hashable]
+
+
+IndexLike = Union[
+    IndexOptions,
+    range,
+    Iterable[Hashable],
+    None,
+]
+
+
 def as_index(obj: IndexLike, size: int) -> Index:
     """Convert input object to an Index with given size."""
 
     if isinstance(obj, Index):
         index = obj
+    elif obj is None:
+        index = ScaledIndex.arange(size)
     elif isinstance(obj, range):
         index = ScaledIndex(obj.start, obj.stop, obj.step)
     elif isinstance(obj, Mapping):

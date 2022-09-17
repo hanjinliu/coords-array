@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from ..coords import Coordinates, Axis, UndefAxis, AxisLike
+from ..coords import Coordinates, Axis, AxisLike
 
 
 def add_axes(axes: Coordinates, shape: tuple[int, ...], key: np.ndarray, key_axes="yx"):
@@ -32,10 +32,10 @@ def switch_slice(axes, all_axes, ifin=np.newaxis, ifnot=":"):
         ifnot = [slice(None)] * len(all_axes)
     elif not hasattr(ifnot, "__iter__"):
         ifnot = [ifnot] * len(all_axes)
-        
+
     if not hasattr(ifin, "__iter__"):
         ifin = [ifin] * len(all_axes)
-        
+
     sl = []
     for a, slin, slout in zip(all_axes, ifin, ifnot):
         if a in axes:
@@ -46,37 +46,37 @@ def switch_slice(axes, all_axes, ifin=np.newaxis, ifnot=":"):
     return sl
 
 
-def slice_axes(axes: Coordinates, key) -> Coordinates:
-    ndim = len(axes)
+def slice_axes(coords: Coordinates, key) -> Coordinates:
+    ndim = len(coords)
     if isinstance(key, tuple):
         ndim += sum(k is None for k in key)
         rest = ndim - len(key)
         if any(k is ... for k in key):
             idx = key.index(...)
-            _keys = key[:idx] + (slice(None),) * (rest + 1) + key[idx + 1:]
+            _keys = key[:idx] + (slice(None),) * (rest + 1) + key[idx + 1 :]
         else:
             _keys = key + (slice(None),) * rest
-            
+
     elif isinstance(key, np.ndarray) or hasattr(key, "__array__"):
         if key.ndim == 1:
-            new_axes = axes
+            new_coords = coords
         else:
-            new_axes = Coordinates([UndefAxis()] + axes[key.ndim:])
-        return new_axes
-    
+            new_coords = Coordinates([None] + coords._axis_list[key.ndim :])
+        return new_coords
+
     elif key is None:
-        return Coordinates([UndefAxis()] + axes)
-    
+        return Coordinates([None] + coords._axis_list)
+
     elif key is ...:
-        return axes
-    
+        return coords
+
     else:
-        _keys = (key,) +(slice(None),) * (ndim - 1)
+        _keys = (key,) + (slice(None),) * (ndim - 1)
 
     _new_axes_list: list[Axis] = []
     list_idx: list[int] = []
 
-    axes_iter = iter(axes)
+    axes_iter = iter(coords)
     for sl in _keys:
         if sl is not None:
             a = next(axes_iter)
@@ -86,8 +86,8 @@ def slice_axes(axes: Coordinates, key) -> Coordinates:
                 _new_axes_list.append(a.slice_axis(sl))
                 list_idx.append(a)
         else:
-            _new_axes_list.append(UndefAxis())  # new axis
-        
+            _new_axes_list.append(None)  # new axis
+
     if len(list_idx) > 1:
         added = False
         out: list[Axis] = []
@@ -95,7 +95,7 @@ def slice_axes(axes: Coordinates, key) -> Coordinates:
             if a not in list_idx:
                 out.append(a)
             elif not added:
-                out.append(UndefAxis())
+                out.append(None)
                 added = True
         _new_axes_list = out
 

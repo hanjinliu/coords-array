@@ -1,18 +1,24 @@
 from __future__ import annotations
 from typing import (
-    Any, Mapping, Sequence, Iterable, overload, MutableMapping, TypeVar, TYPE_CHECKING
+    Any,
+    Mapping,
+    Sequence,
+    Iterable,
+    overload,
+    TypeVar,
+    TYPE_CHECKING,
+    Union,
+    Hashable,
+    Dict,
 )
-import weakref
-import numpy as np
 
-from ._axis import Axis, AxisLike, as_axis, UndefAxis, IndexLike
-from ._index import as_index
+from ._axis import Axis, AxisLike, as_axis, pick_axis
+from ._index import as_index, IndexLike, IndexOptions
 from ._slicer import Slicer
 from ._misc import CoordinateError
 
 if TYPE_CHECKING:
     from ._axes_tuple import AxesTuple
-    from ..typing import CoordinateLike, CoordinateOptions
 
 _T = TypeVar("_T")
 AxesLike = Iterable[AxisLike]
@@ -21,40 +27,43 @@ AxesLike = Iterable[AxisLike]
 class Coordinates(Sequence[Axis]):
     """
     A sequence of axes.
-    
+
     This object behaves like a string as much as possible.
     """
+
     def __init__(self, value: Sequence[Axis] | Coordinates) -> None:
         if not isinstance(value, self.__class__):
             ndim = len(value)
-            
+
             # check duplication
             if ndim > len(set(value)):
                 raise CoordinateError(f"Duplicated axes found: {value}.")
-            
+
             self._axis_list = list(value)
-            
+
         else:
             self._axis_list = [a.__copy__() for a in value._axis_list]
-    
+
     @classmethod
-    def undef(cls, ndim: int):
+    def undef(cls, shape: tuple[int, ...]) -> Coordinates:
         """Construct an Axes object initialized with undefined axes."""
-        return cls([UndefAxis() for _ in range(ndim)])
-    
+        return cls(pick_axis(shape))
+
     @classmethod
-    def from_iterable(cls, axes: Iterable[AxisLike], shape: tuple[int, ...]) -> Coordinates:
+    def from_iterable(
+        cls, axes: Iterable[AxisLike], shape: tuple[int, ...]
+    ) -> Coordinates:
         """Construct an Axes object from an iterable of AxisLike objects."""
         if len(axes) != len(shape):
             raise CoordinateError(
                 f"Length of input ({len(axes)}) and shape ({len(shape)}) do not match."
             )
         return cls([as_axis(a, size) for a, size in zip(axes, shape)])
-    
+
     @classmethod
     def from_dict(
         cls: type[Coordinates],
-        input: Mapping[AxisLike, CoordinateOptions], 
+        input: Mapping[AxisLike, IndexOptions],
         shape: tuple[int, ...],
     ) -> Coordinates:
         """Construct an Axes object from a dictionary."""
@@ -68,7 +77,7 @@ class Coordinates(Sequence[Axis]):
                 raise TypeError(f"Options for {a} must be a dictionary.")
             axes.append(Axis(a, index=as_index(options, size)))
         return cls(axes)
-    
+
     def update_scales(
         self,
         other: Mapping[AxisLike, float] | None = None,
@@ -82,10 +91,10 @@ class Coordinates(Sequence[Axis]):
 
     def __str__(self):
         return "".join(map(str, self._axis_list))
-    
+
     def __repr__(self) -> str:
         return self._repr()
-    
+
     def _repr(self, n_indent: int = 0) -> str:
         """Return a string representation of the axes."""
         clsname = type(self).__name__
@@ -93,18 +102,18 @@ class Coordinates(Sequence[Axis]):
         args = [repr(axis) for axis in self._axis_list]
         args_str = f",\n{indent}  ".join(args)
         return f"{indent}{clsname}(\n{indent}  {args_str}\n{indent})"
-    
+
     def __len__(self):
         return len(self._axis_list)
 
     @overload
     def __getitem__(self, key: int | str | Axis) -> Axis:
         ...
-        
+
     @overload
     def __getitem__(self, key: slice) -> Coordinates:
         ...
-        
+
     def __getitem__(self, key):
         """Get an axis."""
         if isinstance(key, (str, Axis)):
@@ -114,18 +123,20 @@ class Coordinates(Sequence[Axis]):
             return self.__class__(l)
         else:
             return self._axis_list[key]
-    
+
     def __getattr__(self, key: str) -> Axis:
         """Return an axis with name `key`."""
         try:
             idx = self._axis_list.index(key)
         except:
-            raise AttributeError(f"{type(self).__name__!r} object has no attribute {key!r}.")
+            raise AttributeError(
+                f"{type(self).__name__!r} object has no attribute {key!r}."
+            )
         return self._axis_list[idx]
-    
+
     def __iter__(self):
         return iter(self._axis_list)
-    
+
     def __eq__(self, other):
         if isinstance(other, str):
             return str(self) == other
@@ -135,7 +146,7 @@ class Coordinates(Sequence[Axis]):
 
     def __contains__(self, other: AxisLike) -> bool:
         return other in self._axis_list
-    
+
     def __repr__(self):
         s = ", ".join(map(lambda x: repr(str(x)), self))
         return f"{self.__class__.__name__}[{s}]"
@@ -143,15 +154,15 @@ class Coordinates(Sequence[Axis]):
     def __hash__(self) -> int:
         """Hash as a tuple of strings."""
         return hash(tuple(map(str, self._axis_list)))
-    
+
     @overload
     def find(self, axis: str | Axis) -> int:
         ...
-    
+
     @overload
     def find(self, axis: str | Axis, default: _T) -> _T:
         ...
-        
+
     def find(self, axis: str | Axis, *args) -> int:
         """Find the index of an axis."""
         if len(args) > 1:
@@ -165,9 +176,6 @@ class Coordinates(Sequence[Axis]):
             raise CoordinateError(
                 f"Image does not have {axis}-axis: {_axes}."
             ) from None
-    
-    def has_undef(self) -> bool:
-        return any(isinstance(a, UndefAxis) for a in self._axis_list)
 
     def copy(self):
         """Make a copy of Axes object."""
@@ -176,7 +184,7 @@ class Coordinates(Sequence[Axis]):
     def replace(self, old: AxisLike, new: AxisLike) -> Coordinates:
         """
         Create a new Axes object with `old` axis replaced by `new`.
-        
+
         To avoid unexpected effect between images, new scale attribute will be copied.
 
         Parameters
@@ -185,11 +193,11 @@ class Coordinates(Sequence[Axis]):
             Old symbol.
         new : str
             New symbol.
-        """        
+        """
         i = self.index(old)
         if new in self._axis_list and old != new:
             raise CoordinateError(f"Axes {new} already exists: {self}")
-        
+
         if isinstance(new, str):
             new_axis = Axis(new, metadata=self[i].metadata.copy())
         else:
@@ -197,27 +205,27 @@ class Coordinates(Sequence[Axis]):
         axis_list = self._axis_list.copy()
         axis_list[i] = new_axis
         return self.__class__(axis_list)
-    
+
     def contains(self, chars: AxesLike, *, ignore_undef: bool = False) -> bool:
         """True if self contains all the characters in ``chars``."""
         if ignore_undef:
-            return all(a in self._axis_list for a in chars if not isinstance(a, UndefAxis))
+            return all(a in self._axis_list for a in chars)
         return all(a in self._axis_list for a in chars)
-    
+
     def drop(self, axes: AxisLike | AxesLike | int | Iterable[int]) -> Coordinates:
         """Drop an axis or a list of axes."""
         if not isinstance(axes, (list, tuple, str)):
             axes = (axes,)
-        
+
         drop_list = []
         for a in axes:
             if isinstance(a, int):
                 drop_list.append(self._axis_list[a])
             else:
                 drop_list.append(a)
-        
+
         return Coordinates(a for a in self._axis_list if a not in drop_list)
-    
+
     def extend(self, axes: AxesLike) -> Coordinates:
         """Extend axes with given axes."""
         return self + axes
@@ -225,44 +233,47 @@ class Coordinates(Sequence[Axis]):
     @overload
     def create_slice(self, sl: Mapping[str, Any] | Slicer) -> tuple[Any, ...]:
         ...
-    
+
     @overload
     def create_slice(self, **kwargs: dict[str, Any]) -> tuple[Any, ...]:
         ...
-    
-    def create_slice(self, sl = None, /, **kwargs):
+
+    def create_slice(self, sl=None, /, **kwargs):
         if sl is None:
             sl = kwargs
         elif isinstance(sl, Slicer):
             sl = sl._dict
-            
+
         if not sl:
             raise TypeError("Slice not given.")
-        
+
         sl_list = [slice(None)] * len(self)
-    
+
         for k, v in sl.items():
             idx = self.index(k)
             sl_list[idx] = v
-        
+
         return tuple(sl_list)
 
     def tuple(self, iterable: Iterable[_T], /) -> AxesTuple[_T]:
         """Convert iterable to AxesTuple."""
         from ._axes_tuple import get_axes_tuple
+
         try:
             out = get_axes_tuple(self)(*iterable)
         except CoordinateError:
             out = tuple(iterable)
         return out
-    
-    def update_coords(self, coords: Mapping[str, IndexLike] = {}, /, **kwargs) -> Coordinates:
+
+    def update_coords(
+        self, coords: Mapping[str, IndexLike] = {}, /, **kwargs
+    ) -> Coordinates:
         """Update coordinates."""
         if kwargs:
             coords = dict(coords, **kwargs)
         if not coords:
             return self
-        
+
         pairs: list[tuple[Axis, IndexLike]] = []
         for k, v in coords.items():
             axis = self._axis_list[self.find(k)]
@@ -271,8 +282,10 @@ class Coordinates(Sequence[Axis]):
         for axis, crds in pairs:
             axis._set_index(crds)
         return self
-    
-    def update_scales(self, scales: Mapping[str, float] = {}, /, **kwargs) -> Coordinates:
+
+    def update_scales(
+        self, scales: Mapping[str, float] = {}, /, **kwargs
+    ) -> Coordinates:
         """Update scales."""
         _scales = {}
         for k, v in dict(scales, **kwargs).items():
@@ -280,14 +293,21 @@ class Coordinates(Sequence[Axis]):
             if v <= 0:
                 raise ValueError(f"Scale of {k} must be positive: {v}")
             _scales[k] = v
-            
+
         if not _scales:
             return self
-        
+
         for k, v in _scales.items():
             axis = self._axis_list[self.find(k)]
             axis.scale = v
         return self
+
+
+CoordinateLike = Union[
+    Coordinates,
+    Iterable[Hashable],
+    Dict[Hashable, IndexLike],  # coordinate options
+]
 
 
 def as_coordinates(coords: CoordinateLike, shape: tuple[int, ...]) -> Coordinates:
@@ -303,17 +323,17 @@ def as_coordinates(coords: CoordinateLike, shape: tuple[int, ...]) -> Coordinate
         raise TypeError(f"Invalid type for coords: {type(coords)}")
 
 
-def _broadcast_two(coords0: CoordinateLike, coords1: CoordinateLike, rule=None) -> Coordinates:
+def _broadcast_two(
+    coords0: CoordinateLike, coords1: CoordinateLike, rule=None
+) -> Coordinates:
     coords0 = as_coordinates(coords0)
     coords1 = as_coordinates(coords1)
-    
+
     arg_idx: list[int] = []
     out = list(coords0)
     for a in coords1:
-        if type(a) is UndefAxis:
-            raise TypeError("Cannot broadcast coordinates with UndefAxis.")
         arg_idx.append(coords0.find(a, -1))
-    
+
     stack = []
     n_insert = 0
     iter = enumerate(arg_idx.copy())
@@ -327,15 +347,16 @@ def _broadcast_two(coords0: CoordinateLike, coords1: CoordinateLike, rule=None) 
             stack.clear()
     for j in stack:
         out.append(coords1[j])
-        
+
     return Coordinates(out)
+
 
 def broadcast(*axes_objects: AxesLike) -> Coordinates:
     """
     Broadcast two or more axes objects and returns their consensus.
-    
+
     This function is designed for more flexible ``numpy`` broadcasting using axes.
-    
+
     Examples
     --------
     >>> broadcast("zyx", "tzyx")  # Axes "tzyx"
@@ -343,12 +364,12 @@ def broadcast(*axes_objects: AxesLike) -> Coordinates:
     >>> broadcast("yx", "xy")  # Axes "yx"
     """
     n_axes = len(axes_objects)
-    
+
     if n_axes == 2:
         return _broadcast_two(*axes_objects)
     elif n_axes < 2:
         raise TypeError("Less than two axes objects were given.")
-    
+
     it = iter(axes_objects)
     axes0 = next(it)
     for axes1 in it:

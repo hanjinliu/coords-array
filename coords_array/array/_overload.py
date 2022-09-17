@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 import operator
 from .core import CoordsArray
-from ..coords import Axis, Coordinates, AxisLike, UndefAxis
+from ..coords import Axis, Coordinates, AxisLike, pick_axis
 
 # Overloading numpy functions using __array_function__.
 # https://numpy.org/devdocs/reference/arrays.classes.html
@@ -87,8 +87,6 @@ def _(imgs: list[CoordsArray]):
 def _(img: CoordsArray, name: str = None):
     out = np.zeros_like(img.value).view(img.__class__)
     out._inherit_coordinates(img, coords=img.coords)
-    if isinstance(name, str):
-        out.name = name
     return out
 
 
@@ -96,24 +94,22 @@ def _(img: CoordsArray, name: str = None):
 def _(img: CoordsArray, name: str = None):
     out = np.empty_like(img.value).view(img.__class__)
     out._inherit_coordinates(img, coords=img.coords)
-    if isinstance(name, str):
-        out.name = name
     return out
 
 
 @CoordsArray.implements(np.expand_dims)
-def _(img: CoordsArray, axis):
+def _(arr: CoordsArray, axis):
     if isinstance(axis, str):
-        new_axes = Coordinates(axis + str(img.coords))
+        new_axes = Coordinates(axis + str(arr.coords))
         axisint = tuple(new_axes.find(a) for a in axis)
     else:
         axisint = axis
-        new_axes = list(img.coords)
-        new_axes.insert(axis, UndefAxis())
+        new_axes = list(arr.coords)
+        new_axes.insert(axis, pick_axis(1, arr.coords))
 
-    out: np.ndarray = np.expand_dims(img.value, axisint)
-    out = out.view(img.__class__)
-    out._inherit_coordinates(img, new_axes)
+    out: np.ndarray = np.expand_dims(arr.value, axisint)
+    out = out.view(arr.__class__)
+    out._inherit_coordinates(arr, new_axes)
     return out
 
 
@@ -126,7 +122,7 @@ def _(img: CoordsArray, axes):
 def _(img: CoordsArray, indices_or_sections, axis=0):
     if not isinstance(axis, (int, str)):
         raise TypeError(f"`axis` must be int or str, but got {type(axis)}")
-    axis = img.axisof(axis)
+    axis = img.coords.find(axis)
 
     imgs: list[CoordsArray] = np.split(img.value, indices_or_sections, axis=axis)
     out = []
@@ -141,7 +137,7 @@ def _(img: CoordsArray, indices_or_sections, axis=0):
 def _(img: CoordsArray, shape: tuple[int, ...]):
     out: np.ndarray = np.broadcast_to(img.value, shape)
     nexpand = len(shape) - img.ndim
-    new_axes = [UndefAxis()] * nexpand + list(img.coords)
+    new_axes = [None] * nexpand + list(img.coords)
     out = out.view(img.__class__)
     out._inherit_coordinates(img, coords=new_axes)
     return out
@@ -170,16 +166,16 @@ def _(img: CoordsArray, source, destination):
 @CoordsArray.implements(np.swapaxes)
 def _(img: CoordsArray, axis1: int | AxisLike, axis2: int = AxisLike):
     if isinstance(axis1, (str, Axis)):
-        axis1 = img.axisof(axis1)
+        axis1 = img.coords.find(axis1)
     if isinstance(axis2, (str, Axis)):
-        axis2 = img.axisof(axis2)
+        axis2 = img.coords.find(axis2)
     out = np.swapaxes(img.value, axis1, axis2)
-    out = out.view(img.__class__)
+    out: CoordsArray = out.view(img.__class__)
 
     axes_list = list(img.coords)
     axes_list[axis1], axes_list[axis2] = axes_list[axis2], axes_list[axis1]
 
-    out._set_info(img, new_axes=axes_list)
+    out._inherit_coordinates(img, new_axes=axes_list)
     return out
 
 

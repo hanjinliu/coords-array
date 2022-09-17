@@ -8,7 +8,7 @@ from ._mixin import CoordinatesMixin
 from . import _axes_ops as axesop
 
 from ..coords import CoordinateError, Coordinates, Slicer
-from ..typing import CoordinateLike
+from ..coords._coordinates import CoordinateLike
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -45,6 +45,9 @@ class CoordsArray(np.ndarray, CoordinatesMixin):
     def value(self) -> np.ndarray:
         """Numpy view of the array."""
         return np.asarray(self)
+
+    def _get_shape(self) -> tuple[int, ...]:
+        return super().shape
 
     def __repr__(self) -> str:
         if self.ndim > 0:
@@ -126,7 +129,7 @@ class CoordsArray(np.ndarray, CoordinatesMixin):
             return None
 
         try:
-            self.coords = getattr(obj, "axes", None)
+            self.coords = getattr(obj, "coords", None)
         except Exception:
             self.coords = None
         else:
