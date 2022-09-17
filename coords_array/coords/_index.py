@@ -5,28 +5,28 @@ import numpy as np
 
 if TYPE_CHECKING:
     from typing_extensions import Self
-    from ..typing import MetricLike
+    from ..typing import IndexLike
 
 _T = TypeVar("_T", bound=Hashable)
 _Slicable = Union[SupportsIndex, slice, list[int], np.ndarray]
 _Real = Union[int, float]
 
-class Metric(Sequence[_T], ABC):
+class Index(Sequence[_T], ABC):
     @abstractmethod
     def to_indexer(self, coords: _T | slice) -> _Slicable:
         """Convert input into a slicable object."""
 
     @abstractmethod
     def get_size(self) -> int:
-        """Length of the metric."""
+        """Length of the index."""
     
     @abstractmethod
     def get_scale(self) -> float:
-        """Return the scale of the metric."""
+        """Return the scale of the index."""
 
     @abstractmethod
-    def rescaled(self, scale: float) -> Metric[_T]:
-        """Return a rescaled metric."""
+    def rescaled(self, scale: float) -> Index[_T]:
+        """Return a rescaled index."""
     
     def get_unit(self) -> str:
         return self._unit
@@ -41,23 +41,23 @@ class Metric(Sequence[_T], ABC):
         return self.get_size()
     
     @abstractmethod
-    def shifted(self, shift: _T) -> Metric[_T]:
-        """Return a shifted metric."""
+    def shifted(self, shift: _T) -> Index[_T]:
+        """Return a shifted index."""
     
     @abstractmethod
-    def inverted(self) -> Metric[_T]:
-        """Return a inverted metric."""
+    def inverted(self) -> Index[_T]:
+        """Return a inverted index."""
     
     @abstractmethod
-    def subset(self, subset: Iterable[int]) -> Metric[_T]:
-        """Return a subset of the metric."""
+    def subset(self, subset: Iterable[int]) -> Index[_T]:
+        """Return a subset of the index."""
     
     @abstractmethod
     def copy(self: Self) -> Self:
-        """Return a copy of the metric."""
+        """Return a copy of the index."""
 
 
-class ScaledMetric(Metric[_Real]):
+class ScaledIndex(Index[_Real]):
     """Decimal range."""
     
     def __init__(self, start: float, step: float, size: int, unit=None):
@@ -69,31 +69,31 @@ class ScaledMetric(Metric[_Real]):
         self._unit = unit
 
     @classmethod
-    def arange(cls: type[ScaledMetric], size: int, step: float = 1.0) -> Self:
+    def arange(cls: type[ScaledIndex], size: int, step: float = 1.0) -> Self:
         return cls(0.0, step, size)
     
     @property
     def _stop(self) -> float:
         return self._start + self._step * self._size
     
-    def rescaled(self, scale: float) -> ScaledMetric:
-        return ScaledMetric(
+    def rescaled(self, scale: float) -> ScaledIndex:
+        return ScaledIndex(
             start=self._start,
             step=scale, 
             size=self._size,
             unit=self._unit,
         )
     
-    def shifted(self, shift: float) -> ScaledMetric:
-        return ScaledMetric(
+    def shifted(self, shift: float) -> ScaledIndex:
+        return ScaledIndex(
             start=self._start + shift,
             step=self._step, 
             size=self._size,
             unit=self._unit,
         )
     
-    def inverted(self) -> ScaledMetric:
-        return ScaledMetric(
+    def inverted(self) -> ScaledIndex:
+        return ScaledIndex(
             start=self._start,
             step=-self._step,
             size=self._size,
@@ -125,7 +125,7 @@ class ScaledMetric(Metric[_Real]):
                 m_start = self.__getitem__(stop - 1)
             m_step = step * self._step
             size = max((stop - start) // step, 0)
-            val = ScaledMetric(m_start, m_step, size, self._unit)
+            val = ScaledIndex(m_start, m_step, size, self._unit)
         return val
     
     def get_scale(self) -> float:
@@ -148,8 +148,8 @@ class ScaledMetric(Metric[_Real]):
         else:
             return int(np.round((coords - self._start) / self._step))
     
-    def subset(self, subset: Iterable[int]) -> CategoricalCoordinates[_T]:
-        return CategoricalCoordinates(
+    def subset(self, subset: Iterable[int]) -> CategoricalIndex[_T]:
+        return CategoricalIndex(
             [self._start + key * self._step for key in subset]
         )
 
@@ -182,8 +182,8 @@ class ScaledMetric(Metric[_Real]):
 
 _NO_SCALE = object()
 
-class CategoricalCoordinates(Metric[_T]):
-    """A tuple-like object storing label specifiers."""
+class CategoricalIndex(Index[_T]):
+    """An index with categorical labels."""
     
     def __init__(self, seq: Iterable[_T], scale: float | object = _NO_SCALE, unit=None):
         self._labels = tuple(seq)
@@ -215,10 +215,10 @@ class CategoricalCoordinates(Metric[_T]):
     def __getitem__(self, key):
         out = self._labels[key]
         if isinstance(key, slice):
-            return CategoricalCoordinates(out)
+            return CategoricalIndex(out)
         return out
     
-    def copy(self) -> CategoricalCoordinates:
+    def copy(self) -> CategoricalIndex:
         return self.__class__(self._labels, scale=self._scale, unit=self._unit)
     
     def __eq__(self, other: Sequence[_T]) -> bool:
@@ -247,40 +247,40 @@ class CategoricalCoordinates(Metric[_T]):
             idx = self._hash_map[coords]
         return idx
 
-    def rescaled(self, scale: float) -> CategoricalCoordinates:
+    def rescaled(self, scale: float) -> CategoricalIndex:
         return type(self)(self._labels, scale=scale, unit=self._unit)
     
-    def shifted(self, shift: float) -> CategoricalCoordinates:
+    def shifted(self, shift: float) -> CategoricalIndex:
         return self.copy()
     
-    def inverted(self) -> CategoricalCoordinates:
-        return CategoricalCoordinates(
+    def inverted(self) -> CategoricalIndex:
+        return CategoricalIndex(
             self._labels[::-1],
             scale=self._scale,
             unit=self._unit,
         )
     
-    def subset(self, subset: Iterable[int]) -> CategoricalCoordinates[_T]:
+    def subset(self, subset: Iterable[int]) -> CategoricalIndex[_T]:
         """Return a subset of the coordinates."""
-        return CategoricalCoordinates(
+        return CategoricalIndex(
             (self._labels[i] for i in subset),
             unit=self._unit,
         )
 
 
-def as_metric(obj: MetricLike, size: int) -> Metric:
-    if isinstance(obj, Metric):
-        metric = obj
+def as_index(obj: IndexLike, size: int) -> Index:
+    if isinstance(obj, Index):
+        index = obj
     elif isinstance(obj, range):
-        metric = ScaledMetric(obj.start, obj.stop, obj.step)
+        index = ScaledIndex(obj.start, obj.stop, obj.step)
     elif isinstance(obj, Mapping):
-        metric = ScaledMetric.arange(size).rescaled(obj.get("scale", 1.0))
-        metric.set_unit(obj.get("unit", None))
+        index = ScaledIndex.arange(size).rescaled(obj.get("scale", 1.0))
+        index.set_unit(obj.get("unit", None))
     elif hasattr(obj, "__iter__"):
-        metric = CategoricalCoordinates(obj)
+        index = CategoricalIndex(obj)
     else:
         raise TypeError(f"Cannot convert {type(obj)} to Coordinates.")
     
-    if len(metric) != size:
+    if len(index) != size:
         raise ValueError(f"Length of coordinates must be {size}.")
-    return metric
+    return index

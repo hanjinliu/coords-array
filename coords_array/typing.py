@@ -8,7 +8,7 @@ class CoordinateOptions(TypedDict):
     unit: str
     labels: Iterable[Hashable]
 
-MetricLike = Union[
+IndexLike = Union[
     CoordinateOptions,
     range,
     Iterable[Hashable],
@@ -17,5 +17,5 @@ MetricLike = Union[
 CoordinateLike = Union[
     Coordinates, 
     Iterable[Hashable], 
-    Dict[Hashable, MetricLike],  # coordinate options
+    Dict[Hashable, IndexLike],  # coordinate options
 ]

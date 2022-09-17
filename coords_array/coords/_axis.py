@@ -5,7 +5,8 @@ from typing import Any, Hashable, SupportsIndex, Union, Iterable, TYPE_CHECKING
 import numpy as np
 
 from ._misc import CoordinateWarning
-from ._metric import as_metric, Metric, ScaledMetric
+from ._index import as_index, Index, ScaledIndex
+from ..typing import IndexLike
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -90,19 +91,19 @@ class Axis(_AxisBase):
         self,
         name: str,
         *,
-        metric: Metric | None = None,
+        index: Index | None = None,
     ):
         super().__init__(name)
-        self._metric = metric
+        self._index = index
     
     @classmethod
     def from_size(cls: type[Axis], name: str, size: int) -> Self:
-        metric = ScaledMetric.arange(size)
-        return cls(name, metric=metric)
+        index = ScaledIndex.arange(size)
+        return cls(name, index=index)
     
     def __copy__(self) -> Self:
         """Return a copy of the axis."""
-        return self.__class__(self._name, metric=self.metric)
+        return self.__class__(self._name, index=self.index)
     
     def __hash__(self) -> int:
         """Hash as a string."""
@@ -110,12 +111,12 @@ class Axis(_AxisBase):
 
     def __repr__(self) -> str:
         _cls = type(self).__name__
-        return f"{_cls}(name={self.name!r}, metric={self.metric!r})"
+        return f"{_cls}(name={self.name!r}, index={self.index!r})"
 
     @property
     def scale(self) -> float:
         """Physical scale of axis."""
-        return self.metric.get_scale()
+        return self.index.get_scale()
     
     @scale.setter
     def scale(self, value: _Real) -> None:
@@ -123,42 +124,42 @@ class Axis(_AxisBase):
         value = float(value)
         if value <= 0:
             raise ValueError(f"Cannot set negative scale: {value!r}.")
-        self.metric = self.metric.rescaled(value)
+        self.index = self.index.rescaled(value)
     
     @property
     def unit(self) -> str:
         """Physical scale unit of axis."""
-        return self.metric.get_unit()
+        return self.index.get_unit()
     
     @unit.setter
     def unit(self, value: str | None):
         """Set physical unit to the axis."""
-        return self.metric.set_unit(value)
+        return self.index.set_unit(value)
 
     @property
-    def metric(self) -> Metric:
-        """Axis metric."""
-        return self._metric
+    def index(self) -> Index:
+        """Axis index."""
+        return self._index
     
-    @metric.setter
-    def metric(self, value: MetricLike) -> None:
-        """Set axis metric."""
-        metric = as_metric(value, self.size)
-        self._set_metric(metric)
+    @index.setter
+    def index(self, value: IndexLike) -> None:
+        """Set axis index."""
+        index = as_index(value, self.size)
+        self._set_index(index)
     
-    def _set_metric(self, metric: Metric) -> None:
-        """Set axis metric without validation."""
-        self._metric = metric
+    def _set_index(self, index: Index) -> None:
+        """Set axis index without validation."""
+        self._index = index
     
     @property
     def size(self) -> int:
-        return self.metric.get_size()
+        return self.index.get_size()
 
-    def isin(self, values: MetricLike) -> np.ndarray:
+    def isin(self, values: IndexLike) -> np.ndarray:
         """Check if labels are in values."""
-        if self.metric is None:
+        if self.index is None:
             raise ValueError("Axis has no coordinates.")
-        return np.array([label in values for label in self.metric])
+        return np.array([label in values for label in self.index])
 
     def slice_axis(self, sl: _Slicable) -> Self:
         """
@@ -174,16 +175,15 @@ class Axis(_AxisBase):
 
         # slice coordinates
         if isinstance(sl, slice):
-            new_metric = self.metric[sl]
+            new_index = self.index[sl]
         else:
-            new_metric = self.metric.subset(sl)
+            new_index = self.index.subset(sl)
         
-        return self.__class__(self._name, metric=new_metric)
+        return self.__class__(self._name, index=new_index)
 
     
 
 AxisLike = Union[str, _AxisBase]
-MetricLike = Iterable[Hashable]
 
 
 class UndefAxis(Axis):

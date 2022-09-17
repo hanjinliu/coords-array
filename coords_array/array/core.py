@@ -92,7 +92,7 @@ class CoordsArray(np.ndarray, AxesMixin):
         for k, v in kwargs.items():
             idx = axes.find(k)
             axis = axes[idx]
-            if lbl := axis.metric:
+            if lbl := axis.index:
                 if isinstance(v, list):
                     slices[idx] = [lbl.index(each) for each in v]
                 else:

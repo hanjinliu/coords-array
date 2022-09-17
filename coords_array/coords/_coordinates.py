@@ -5,8 +5,8 @@ from typing import (
 import weakref
 import numpy as np
 
-from ._axis import Axis, AxisLike, as_axis, UndefAxis, MetricLike
-from ._metric import as_metric
+from ._axis import Axis, AxisLike, as_axis, UndefAxis, IndexLike
+from ._index import as_index
 from ._slicer import Slicer
 from ._misc import CoordinateError
 
@@ -66,7 +66,7 @@ class Coordinates(Sequence[Axis]):
         for (a, options), size in zip(input.items(), shape):
             if not isinstance(options, Mapping):
                 raise TypeError(f"Options for {a} must be a dictionary.")
-            axes.append(Axis(a, metric=as_metric(options, size)))
+            axes.append(Axis(a, index=as_index(options, size)))
         return cls(axes)
     
     def update_scales(
@@ -256,20 +256,20 @@ class Coordinates(Sequence[Axis]):
             out = tuple(iterable)
         return out
     
-    def update_coords(self, coords: Mapping[str, MetricLike] = {}, /, **kwargs) -> Coordinates:
+    def update_coords(self, coords: Mapping[str, IndexLike] = {}, /, **kwargs) -> Coordinates:
         """Update coordinates."""
         if kwargs:
             coords = dict(coords, **kwargs)
         if not coords:
             return self
         
-        pairs: list[tuple[Axis, MetricLike]] = []
+        pairs: list[tuple[Axis, IndexLike]] = []
         for k, v in coords.items():
             axis = self._axis_list[self.find(k)]
-            _crds = as_metric(v, size=axis.size)
+            _crds = as_index(v, size=axis.size)
             pairs.append((axis, _crds))
         for axis, crds in pairs:
-            axis._set_metric(crds)
+            axis._set_index(crds)
         return self
     
     def update_scales(self, scales: Mapping[str, float] = {}, /, **kwargs) -> Coordinates:
