@@ -3,7 +3,7 @@ from ._coordinates import (
     CoordinateError,
     broadcast,
     as_index,
-    as_coordinates,
+    build_coords,
 )
 from ._axis import Axis, as_axis, AxisLike, IndexLike, pick_axis
 from ._slicer import Slicer

@@ -1,6 +1,7 @@
 from __future__ import annotations
+from math import prod
 import numpy as np
-from ..coords import Coordinates, Axis, AxisLike
+from ..coords import Coordinates, Axis, pick_axis
 
 
 def add_axes(axes: Coordinates, shape: tuple[int, ...], key: np.ndarray, key_axes="yx"):
@@ -17,37 +18,12 @@ def add_axes(axes: Coordinates, shape: tuple[int, ...], key: np.ndarray, key_axe
     return key
 
 
-def complement_axes(axes, all_axes="ptzcyx") -> list[AxisLike]:
-    c_axes = []
-    axes_list = list(axes)
-    for a in all_axes:
-        if a not in axes_list:
-            c_axes.append(a)
-    return c_axes
+def slice_coordinates(coords: Coordinates, key, shape: tuple[int, ...]) -> Coordinates:
+    """Slice a coordinates and return a new coordinates with given shape."""
 
-
-def switch_slice(axes, all_axes, ifin=np.newaxis, ifnot=":"):
-    axes = list(axes)
-    if ifnot == ":":
-        ifnot = [slice(None)] * len(all_axes)
-    elif not hasattr(ifnot, "__iter__"):
-        ifnot = [ifnot] * len(all_axes)
-
-    if not hasattr(ifin, "__iter__"):
-        ifin = [ifin] * len(all_axes)
-
-    sl = []
-    for a, slin, slout in zip(all_axes, ifin, ifnot):
-        if a in axes:
-            sl.append(slin)
-        else:
-            sl.append(slout)
-    sl = tuple(sl)
-    return sl
-
-
-def slice_axes(coords: Coordinates, key) -> Coordinates:
     ndim = len(coords)
+    names = {a.name for a in coords}
+
     if isinstance(key, tuple):
         ndim += sum(k is None for k in key)
         rest = ndim - len(key)
@@ -58,14 +34,18 @@ def slice_axes(coords: Coordinates, key) -> Coordinates:
             _keys = key + (slice(None),) * rest
 
     elif isinstance(key, np.ndarray) or hasattr(key, "__array__"):
-        if key.ndim == 1:
+        ndim = key.ndim
+        if ndim == 1:
             new_coords = coords
         else:
-            new_coords = Coordinates([None] + coords._axis_list[key.ndim :])
+            new_size = prod(shape[:ndim])
+            new_coords = Coordinates(
+                pick_axis(new_size, names) + coords._axis_list[ndim:]
+            )
         return new_coords
 
     elif key is None:
-        return Coordinates([None] + coords._axis_list)
+        return Coordinates([pick_axis(shape[0], names)] + coords._axis_list)
 
     elif key is ...:
         return coords
@@ -73,29 +53,35 @@ def slice_axes(coords: Coordinates, key) -> Coordinates:
     else:
         _keys = (key,) + (slice(None),) * (ndim - 1)
 
+    # "_keys" is the same length as "shape" and "_new_axes_list"
+
     _new_axes_list: list[Axis] = []
     list_idx: list[int] = []
 
     axes_iter = iter(coords)
+    shape_iter = iter(shape)
     for sl in _keys:
         if sl is not None:
             a = next(axes_iter)
             if isinstance(sl, (slice, np.ndarray)):
+                size = next(shape_iter)
                 _new_axes_list.append(a.slice_axis(sl))
             elif isinstance(sl, list):
+                size = next(shape_iter)
                 _new_axes_list.append(a.slice_axis(sl))
                 list_idx.append(a)
         else:
-            _new_axes_list.append(None)  # new axis
+            size = next(shape_iter)
+            _new_axes_list.append(pick_axis(size, names))  # new axis
 
     if len(list_idx) > 1:
         added = False
         out: list[Axis] = []
-        for a in _new_axes_list:
+        for size, a in zip(shape, _new_axes_list):
             if a not in list_idx:
                 out.append(a)
             elif not added:
-                out.append(None)
+                out.append(pick_axis(size, names))
                 added = True
         _new_axes_list = out
 

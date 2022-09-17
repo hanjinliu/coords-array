@@ -1,4 +1,5 @@
 from __future__ import annotations
+from enum import Enum, auto
 from typing import (
     Any,
     Mapping,
@@ -43,6 +44,10 @@ class Coordinates(Sequence[Axis]):
 
         else:
             self._axis_list = [a.__copy__() for a in value._axis_list]
+
+    @property
+    def shape(self) -> AxesTuple:
+        return AxesTuple(self._axis_list)
 
     @classmethod
     def undef(cls, shape: tuple[int, ...]) -> Coordinates:
@@ -307,27 +312,68 @@ CoordinateLike = Union[
     Coordinates,
     Iterable[Hashable],
     Dict[Hashable, IndexLike],  # coordinate options
+    "Space",
 ]
 
 
-def as_coordinates(coords: CoordinateLike, shape: tuple[int, ...]) -> Coordinates:
-    if coords is None:
+class SpaceInputType(Enum):
+    undef = auto()
+    mapping = auto()
+    iterable = auto()
+    coordinate = auto()
+
+
+class Space:
+    def __init__(self, coords: CoordinateLike):
+        if coords is None:
+            self._type = SpaceInputType.undef
+        elif isinstance(coords, Coordinates):
+            self._type = SpaceInputType.coordinate
+        elif isinstance(coords, Mapping):
+            self._type = SpaceInputType.mapping
+        elif isinstance(coords, Iterable):
+            self._type = SpaceInputType.iterable
+        elif isinstance(coords, Space):
+            self._type = coords._type
+            coords = coords._coords
+        else:
+            raise TypeError(f"Invalid type for coords: {type(coords)}")
+
+        self._coords = coords
+
+    def build(self, shape: tuple[int, ...]) -> Coordinates:
+        return self._BUILDER[self._type](self, shape)
+
+    def _build_undef(self, shape: tuple[int, ...]) -> Coordinates:
         return Coordinates.undef(len(shape))
-    elif isinstance(coords, Coordinates):
-        return coords
-    elif isinstance(coords, Mapping):
-        return Coordinates.from_dict(coords, shape)
-    elif isinstance(coords, Iterable):
-        return Coordinates.from_iterable(coords, shape)
-    else:
-        raise TypeError(f"Invalid type for coords: {type(coords)}")
+
+    def _build_mapping(self, shape: tuple[int, ...]) -> Coordinates:
+        return Coordinates.from_dict(self._coords, shape)
+
+    def _build_iterable(self, shape: tuple[int, ...]) -> Coordinates:
+        return Coordinates.from_iterable(self._coords, shape)
+
+    def _build_coordinate(self, shape: tuple[int, ...]) -> Coordinates:
+        if self._coords.shape != shape:
+            raise ValueError(f"Shape mismatch: {self._coords.shape} != {shape}")
+        return self._coords
+
+    _BUILDER = {
+        SpaceInputType.undef: _build_undef,
+        SpaceInputType.mapping: _build_mapping,
+        SpaceInputType.iterable: _build_iterable,
+        SpaceInputType.coordinate: _build_coordinate,
+    }
 
 
-def _broadcast_two(
-    coords0: CoordinateLike, coords1: CoordinateLike, rule=None
-) -> Coordinates:
-    coords0 = as_coordinates(coords0)
-    coords1 = as_coordinates(coords1)
+def build_coords(coords: CoordinateLike, shape: tuple[int, ...]) -> Coordinates:
+    """Build coordinates with given shape."""
+    return Space(coords).build(shape)
+
+
+def _broadcast_two(coords0: CoordinateLike, coords1: CoordinateLike) -> Coordinates:
+    coords0 = build_coords(coords0)
+    coords1 = build_coords(coords1)
 
     arg_idx: list[int] = []
     out = list(coords0)
