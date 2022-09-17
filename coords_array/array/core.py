@@ -68,10 +68,11 @@ class CoordsArray(np.ndarray, CoordinatesMixin):
 
         out = super().__getitem__(key)  # get item as np.ndarray
 
-        if isinstance(
-            out, self.__class__
-        ):  # cannot set attribution to such as numpy.int32
-            out._inherit_coordinates(self, coords=axesop.slice_axes(self.coords, key))
+        # NOTE: cannot set attribution to such as numpy.int32
+        if isinstance(out, self.__class__):
+            out._inherit_coordinates(
+                self, coords=axesop.slice_coordinates(self.coords, key, out.shape)
+            )
 
         return out
 
@@ -113,10 +114,11 @@ class CoordsArray(np.ndarray, CoordinatesMixin):
         key = self.coords.create_slice(kwargs)
         out = super().__getitem__(key)  # get item as np.ndarray
 
-        if isinstance(
-            out, self.__class__
-        ):  # cannot set attribution to such as numpy.int32
-            out._inherit_coordinates(self, coords=axesop.slice_axes(self.coords, key))
+        # NOTE: cannot set attribution to such as numpy.int32
+        if isinstance(out, self.__class__):
+            out._inherit_coordinates(
+                self, coords=axesop.slice_coordinates(self.coords, key, out.shape)
+            )
         return out
 
     def __array_finalize__(self, obj):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
-from ..coords import Coordinates, CoordinateError, as_coordinates
+from ..coords import Coordinates, CoordinateError, build_coords
 from ..coords._coordinates import CoordinateLike
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class CoordinatesMixin:
         if value is None:
             self._coords = Coordinates.undef(self._get_shape())
         else:
-            self._coords = as_coordinates(value, self._get_shape())
+            self._coords = build_coords(value, self._get_shape())
 
     @property
     def shape(self) -> tuple[int, ...]:
