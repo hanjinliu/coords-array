@@ -286,7 +286,6 @@ class IndexOptions(TypedDict):
 
 IndexLike = Union[
     IndexOptions,
-    range,
     Iterable[Hashable],
     None,
 ]
@@ -299,13 +298,16 @@ def as_index(obj: IndexLike, size: int) -> Index:
         index = obj
     elif obj is None:
         index = ScaledIndex.arange(size)
-    elif isinstance(obj, range):
-        index = ScaledIndex(obj.start, obj.stop, obj.step)
     elif isinstance(obj, Mapping):
-        index = ScaledIndex.arange(size).rescaled(obj.get("scale", 1.0))
+        if "labels" in obj:
+            index = CategoricalIndex(obj["labels"])
+        else:
+            index = ScaledIndex.arange(size)
+        if scale := obj.get("scale", None):
+            index = index.rescaled(scale)
         index.set_unit(obj.get("unit", None))
     elif hasattr(obj, "__iter__"):
-        index = CategoricalIndex(obj)
+        index = CategoricalIndex(list(obj)[:size])
     else:
         raise TypeError(f"Cannot convert {type(obj)} to Coordinates.")
 

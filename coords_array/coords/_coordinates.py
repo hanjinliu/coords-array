@@ -14,9 +14,11 @@ from typing import (
 )
 
 from ._axis import Axis, AxisLike, as_axis, pick_axis
-from ._index import as_index, IndexLike, IndexOptions
+from ._index import as_index, IndexLike
 from ._slicer import Slicer
 from ._misc import CoordinateError
+
+from .._shared_types import AxisOptions
 
 if TYPE_CHECKING:
     from ._axes_tuple import AxesTuple
@@ -47,7 +49,7 @@ class Coordinates(Sequence[Axis]):
 
     @property
     def shape(self) -> AxesTuple:
-        return AxesTuple(self._axis_list)
+        return self.tuple(a.size for a in self)
 
     @classmethod
     def undef(cls, shape: tuple[int, ...]) -> Coordinates:
@@ -68,7 +70,7 @@ class Coordinates(Sequence[Axis]):
     @classmethod
     def from_dict(
         cls: type[Coordinates],
-        input: Mapping[AxisLike, IndexOptions],
+        input: Mapping[str, AxisOptions],
         shape: tuple[int, ...],
     ) -> Coordinates:
         """Construct an Axes object from a dictionary."""
