@@ -3,6 +3,7 @@ from typing_extensions import TypedDict
 from numpy.typing import DTypeLike
 
 ShapeLike = Union[SupportsIndex, Tuple[SupportsIndex, ...]]
+PartialShapeLike = Union[SupportsIndex, Tuple[Union[SupportsIndex, None], ...]]
 
 
 class AxisOptions(TypedDict):

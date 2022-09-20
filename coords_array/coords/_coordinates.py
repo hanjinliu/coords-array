@@ -51,6 +51,10 @@ class Coordinates(Sequence[Axis]):
     def shape(self) -> AxesTuple:
         return self.tuple(a.size for a in self)
 
+    @property
+    def axes(self) -> tuple[str, ...]:
+        return tuple(map(str, self._axis_list))
+
     @classmethod
     def undef(cls, shape: tuple[int, ...]) -> Coordinates:
         """Construct an Axes object initialized with undefined axes."""

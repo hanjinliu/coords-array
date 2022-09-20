@@ -226,7 +226,7 @@ class CoordsArray(np.ndarray, CoordinatesMixin):
         change the order of image dimensions.
         'axes' will also be arranged.
         """
-        _axes = [self.axisof(a) for a in axis_names]
+        _axes = [self.coords.find(a) for a in axis_names]
         new_coords = [self.coords[i] for i in list(axis_names)]
         out: np.ndarray = np.transpose(self.value, _axes)
         out: Self = out.view(self.__class__)
@@ -244,11 +244,7 @@ class CoordsArray(np.ndarray, CoordinatesMixin):
         if not isinstance(value, CoordsArray):
             return value
         current_axes = self.coords
-        if (
-            current_axes == value.coords
-            or current_axes.has_undef()
-            or value.coords.has_undef()
-        ):
+        if current_axes == value.coords:
             # In most cases arrays don't need broadcasting. Check axes first to
             # avoid spending time on broadcasting.
             return value
@@ -284,8 +280,8 @@ class CoordsArray(np.ndarray, CoordinatesMixin):
         if self.shape == shape and current_axes == coords:
             return self
         if any(a not in coords for a in current_axes):
-            ax0 = [a.name for a in current_axes]
-            ax1 = [a.name for a in coords]
+            ax0 = [str(a) for a in current_axes]
+            ax1 = [str(a) for a in coords]
             raise CoordinateError(f"Cannot broadcast array with axes {ax0} to {ax1}.")
 
         out = self.value
@@ -388,7 +384,7 @@ class CoordsArray(np.ndarray, CoordinatesMixin):
         return super().__ifloordiv__(value)
 
     def _process_output(self, func, args, kwargs):
-        # find the largest MetaArray. Largest because of broadcasting.
+        # find the largest CoordsArray. Largest because of broadcasting.
         arr = None
         for arg in args:
             if isinstance(arg, self.__class__):
@@ -433,12 +429,12 @@ def _replace_inputs(img: CoordsArray, args: tuple[Any], kwargs: dict[str, Any]):
         axis = kwargs["axis"]
         if not hasattr(axis, "__iter__"):
             axis = [axis]
-        kwargs["axis"] = tuple(map(img.axisof, axis))
+        kwargs["axis"] = tuple(img.coords.find(a) for a in axis)
 
     if kwargs.get("axes", None) is not None:
         # used in such as np.rot90
         axes = kwargs["axes"]
-        kwargs["axes"] = tuple(map(img.axisof, axes))
+        kwargs["axis"] = tuple(img.coords.find(a) for a in axes)
 
     if kwargs.get("out", None) is not None:
         kwargs["out"] = tuple(_as_np_ndarray(a) for a in kwargs["out"])
